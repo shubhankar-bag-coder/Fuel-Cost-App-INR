@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fuel Cost Calculator - Help & Tooltips</title>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    margin: 0;
+    background: #f5f7fa;
+    color: #333;
+    position: relative;
+  }
+
+  header {
+    background: linear-gradient(90deg, #007bff, #00a2ff);
+    color: white;
+    text-align: center;
+    padding: 0.8em 0;
+    position: relative;
+  }
+
+  header h1 {
+    margin: 0;
+    font-size: 1.6em;
+  }
+
+  header p {
+    margin: 2px 0 0;
+    font-size: 0.9em;
+  }
+
+  /* Help icon */
+  #helpIcon {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 1.5em;
+    cursor: pointer;
+    color: white;
+  }
+
+  #helpTooltip {
+    display: none;
+    position: absolute;
+    top: 40px;
+    right: 15px;
+    width: 250px;
+    background: #007bff;
+    color: white;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.85em;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    z-index: 1000;
+  }
+
+  main {
+    max-width: 800px;
+    margin: 20px auto;
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  }
+
+  h2 {
+    color: #007bff;
+    margin-bottom: 10px;
+  }
+
+  label {
+    display: block;
+    margin-top: 12px;
+    font-weight: 500;
+  }
+
+  input {
+    width: 100%;
+    padding: 10px;
+    margin-top: 6px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 15px;
+  }
+
+  .result {
+    margin-top: 20px;
+    background: #eaf4ff;
+    padding: 15px;
+    border-radius: 6px;
+    font-weight: 500;
+    font-size: 1.1em;
+    position: relative;
+  }
+
+  .number {
+    display: inline-block;
+    transition: all 0.5s ease-out;
+    position: relative;
+  }
+
+  .number:hover::after {
+    content: attr(data-value);
+    position: absolute;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #007bff;
+    color: white;
+    padding: 4px 8px;
+    font-size: 0.85em;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0.9;
+  }
+
+  canvas {
+    margin-top: 25px;
+    width: 100% !important;
+    height: 300px !important;
+  }
+
+  @media (max-width: 600px) {
+    main {
+      margin: 10px;
+      padding: 15px;
+    }
+  }
+</style>
+</head>
+
+<body>
+<header>
+  <h1>Fuel Cost Calculator</h1>
+  <p>Real-time daily, monthly, and annual costs</p>
+  <div id="helpIcon">❔</div>
+  <div id="helpTooltip">
+    <strong>How to use:</strong><br>
+    - <strong>Daily Distance:</strong> distance you drive per day.<br>
+    - <strong>Fuel Efficiency:</strong> your vehicle's km/l <br>
+    - <strong>Fuel Price:</strong> cost per liter.<br>
+    Numbers and chart update automatically as you type.
+  </div>
+</header>
+
+<main>
+  <h2>Fuel Usage Details</h2>
+
+  <label>Daily Distance (km):</label>
+  <input type="number" id="distance" placeholder="e.g. 40" />
+
+  <label>Fuel Efficiency (km/l):</label>
+  <input type="number" id="efficiency" placeholder="e.g. 15" />
+
+  <label>Fuel Price (per liter):</label>
+  <input type="number" id="price" placeholder="e.g. 105" />
+
+  <div class="result" id="costResult">
+    🚗 Fuel Required per Day: <span id="liters" class="number" data-value="0">0</span> L<br>
+    💰 Daily Cost: ₹<span id="daily" class="number" data-value="0">0</span><br>
+    📅 Monthly Cost: ₹<span id="monthly" class="number" data-value="0">0</span><br>
+    🗓️ Annual Cost: ₹<span id="yearly" class="number" data-value="0">0</span>
+  </div>
+
+  <canvas id="costChart"></canvas>
+</main>
+
+<script>
+let chartInstance = null;
+
+// Help tooltip toggle
+const helpIcon = document.getElementById('helpIcon');
+const helpTooltip = document.getElementById('helpTooltip');
+helpIcon.addEventListener('click', () => {
+  helpTooltip.style.display = helpTooltip.style.display === 'block' ? 'none' : 'block';
+});
+
+// Smooth number animation
+function animateValue(id, start, end, duration) {
+  let startTime = null;
+  const element = document.getElementById(id);
+  element.setAttribute('data-value', end.toFixed(2)); // Tooltip value
+
+  const step = (timestamp) => {
+    if (!startTime) startTime = timestamp;
+    const progress = Math.min((timestamp - startTime) / duration, 1);
+    const value = start + (end - start) * progress;
+    element.textContent = value.toFixed(2);
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// Real-time updates
+function updateCosts() {
+  const distance = parseFloat(document.getElementById('distance').value);
+  const efficiency = parseFloat(document.getElementById('efficiency').value);
+  const price = parseFloat(document.getElementById('price').value);
+
+  if (isNaN(distance) || isNaN(efficiency) || isNaN(price) || efficiency <= 0) return;
+
+  const litersPerDay = distance / efficiency;
+  const dailyCost = litersPerDay * price;
+  const monthlyCost = dailyCost * 30;
+  const yearlyCost = dailyCost * 365;
+
+  animateValue('liters', parseFloat(document.getElementById('liters').textContent), litersPerDay, 600);
+  animateValue('daily', parseFloat(document.getElementById('daily').textContent), dailyCost, 600);
+  animateValue('monthly', parseFloat(document.getElementById('monthly').textContent), monthlyCost, 600);
+  animateValue('yearly', parseFloat(document.getElementById('yearly').textContent), yearlyCost, 600);
+
+  renderChart(dailyCost, monthlyCost, yearlyCost);
+}
+
+// Chart rendering with hover tooltips for all bars
+function renderChart(daily, monthly, yearly) {
+  const ctx = document.getElementById('costChart').getContext('2d');
+  if (chartInstance) chartInstance.destroy();
+
+  chartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Daily', 'Monthly', 'Annual'],
+      datasets: [{
+        label: 'Fuel Cost (₹)',
+        data: [daily, monthly, yearly],
+        backgroundColor: [
+          'rgba(0, 123, 255, 0.7)',
+          'rgba(0, 180, 255, 0.7)',
+          'rgba(0, 90, 255, 0.7)'
+        ],
+        borderColor: '#007bff',
+        borderWidth: 1,
+        borderRadius: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      animation: { duration: 1000, easing: 'easeOutQuart' },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => '₹' + v } }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          enabled: true,
+          callbacks: { label: context => `₹${context.parsed.y.toFixed(2)}` }
+        }
+      },
+      hover: { mode: 'nearest', intersect: true }
+    }
+  });
+}
+
+// Input listeners
+['distance','efficiency','price'].forEach(id => {
+  document.getElementById(id).addEventListener('input', updateCosts);
+});
+</script>
+</body>
+</html>
